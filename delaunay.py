@@ -100,6 +100,10 @@ class FlatTriangulation:
         self.vectors[e2] = S.tangent_vector(pol2, S.polygon(pol2).vertex(ver2), hol2)
     
     def plot(self, *args, **kwds):
-        return sum(v.straight_line_trajectory().plot(*args, **kwds) for v in self.vectors[::2])
-
+        res = Graphics()
+        for v in self.vectors[::2]:
+            traj = v.straight_line_trajectory()
+            traj.flow(100)
+            res = res + traj.plot(*args, **kwds)
+        return res
 
