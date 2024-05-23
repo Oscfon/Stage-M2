@@ -218,6 +218,8 @@ class FlatTriangulation:
 
     
     def geodesic(self, e1): #return the hyperbolic geometric associate to the edge with label e1 in the corresponding triangulation
+        if not self.is_flipable(e1):
+            return None
         if e1%2 == 0:
             e2 = e1+1
         else : e2 = e1-1
@@ -263,16 +265,17 @@ class IsoDelaunayCell:
                 cor[g].append(i)
             else:
                 cor[g] = [i]
-            if Passage1:
-                Sol = g.left_half_space()
-                Passage1 = False
-            else:
-                Sol = H.intersection(Sol, g.left_half_space())
+            if g != None:
+                if Passage1:
+                    Sol = g.left_half_space()
+                    Passage1 = False
+                else:
+                    Sol = H.intersection(Sol, g.left_half_space())
         self.polygon = Sol
         e = [s.geodesic() for s in Sol.edges()]
         cor_final = {}
         for g in e:
-            cor_final[g] = cor[g][:]
+            cor_final[g] = cor[g]
         self.correspondance = cor_final
 
     def plot(self, *args, **kwds):
