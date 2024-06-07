@@ -479,7 +479,7 @@ class IsoDelaunayTessellation:
         for e in range(len(self._graph.edge_permutation(copy=False))):
             if self.is_explorable(e):
                 res.append(e)
-                res2.append(self._edge_to_geodesic[e]))
+                res2.append(self._edge_to_geodesic[e])
         return res,res2
             
         
