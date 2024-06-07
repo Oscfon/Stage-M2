@@ -234,11 +234,11 @@ class FlatTriangulation:
         f2 = fp[f1]
         g1 = fp[e2]
         g2 = fp[g1]
-        x1 = t._vectors[g1].vector()[0]
-        y1 = t._vectors[g1].vector()[1]
-        x2 = t._vectors[e1].vector()[0]
-        y2 = t._vectors[e1].vector()[1]
-        V = -t._vectors[f2].vector()
+        x1 = self._vectors[g1].vector()[0]
+        y1 = self._vectors[g1].vector()[1]
+        x2 = self._vectors[e1].vector()[0]
+        y2 = self._vectors[e1].vector()[1]
+        V = -self._vectors[f2].vector()
         x3 = V[0]
         y3 = V[1]
         a = x1*y2*y3*(y3-y2) + x2*y1*y3*(y1-y3) + x3*y1*y2*(y2-y1)
@@ -284,11 +284,211 @@ class IsoDelaunayCell:
             cor_final[g] = cor[g]
         self._correspondance = cor_final
 
+    def __repr__(self):
+        return 'Iso-Delaunay Cell of a {}'.format(self._triangulation)
+
+    def __eq__(self, other):
+        if not isinstance(other, IsoDelaunayCell):
+            raise ValueError('can not compare object of type {} with IsoDelaunayCell'.format(type(other).__name__))
+        if not self._triangulation._surface == other._triangulation._surface:
+            raise ValueError('can not compare IsoDelaunayCell from different surface')
+        return self._polygon == other._polygon
+
+    def edges(self): #return the list of geodesic that defines the cell in ccw order
+        e = self._polygon.edges()
+        return [elt.geodesic() for elt in e]
+
+    def adjacent(self,other):
+        if not isinstance(other, IsoDelaunayCell):
+            raise ValueError('can not compare adjacency of object of type {} with IsoDelaunayCell'.format(type(other).__name__))
+        if not self._triangulation._surface == other._triangulation._surface:
+            raise ValueError('can not compare adjacency of IsoDelaunayCell from different surface')
+        if self == other:
+            return False
+        p1 = self._polygon
+        p2 = other._polygon
+        i = p1.intersection(p2)
+        if i.is_empty():
+            return False
+        elif i.dimension() == 0:
+            return False
+        elif i.dimension() == 1:
+            return True
+        else:
+            return ValueError('this case should not occur.')
+    
     def plot(self, *args, **kwds):
         return self._polygon.plot(*args, **kwds)
 
 
+class IsoDelaunayTessellation:
+    def __init__(self,c):
+        self._explored = {} #dictionnary of the cell already explored
+        self._explored[0] = c
+        k = len(c._correspondance)
+        ep = [2*(i//2)+(1- i%2) for i in range(2*k)]
+        fp = [-1]*(2*k)
+        geo = c.edges()
+        self._edge_to_vertex = [None]*(2*k)
+        self._edge_to_geodesic = [None]*(2*k)
+        vp = [-1]*(2*k)
+        for i in range(k):
+            geo[i] = geo[i].geodesic()
+            fp[2*i] = (2*i+3)%(2*k)
+            fp[(2*i+3)%(2*k)] = 2*i
+            self._edge_to_vertex[2*i] = 0
+            self._edge_to_vertex[(2*i+3)%(2*k)] = 1
+            self._edge_to_geodesic[2*i] = geo[i].geodesic()
+            vp[2*i] = (2*i+2)%(2*k)
+            vp[2*i+1] = (2*i+3)%(2*k)
+        try:
+            self._graph = FatGraph(ep=ep, fp=fp) # the dual-graph of the cell already explored
+        except TypeError:
+            self._graph = FatGraph(fp=fp)
+        self._boundary = [1] # list of the boundary vertex (in the FatGraph, it correponds to a vertex but it's a Delaunay cell)
+    
 
-
-
+    def explore(self, e): # e is the number of the semi-edge that we explore
+        if self._edge_to_geodesic[e] == None:
+            raise ValueError('This edge come from an unexplored vertex')
+        if e%2 == 0:
+            e2 = e+1
+        else : e2 = e-1
+        if self._edge_to_geodesic[e2] != None:
+            raise ValueError("The vertex linked to this edge has already been explored")
+        v = self._edge_to_vertex[e]
+        v2 = self._edge_to_vertex[e2]
+        geo = self._edge_to_geodesic[e]
+        oc = self._explored[v]
+        edges_to_flip = oc._correspondance[geo]
+        tri = oc._triangulation.copy()
         
+        for elt in edges_to_flip:
+            tri.flip(elt)
+        new_c = IsoDelaunayCell(tri)
+        self._boundary.remove(v2)
+        self._explored[v2] = new_c
+        
+        fp = self._graph.face_permutation(copy = True)
+        ep = self._graph.edge_permutation(copy = True)
+        vp = self._graph.vertex_permutation(copy = True)
+        new_ver = self._graph.num_vertices()
+        new_edges = new_c.edges()
+        nb_e = len(new_edges)
+        for i in range(nb_e):
+            if new_edges[i].unoriented() == geo.unoriented():
+                index = i
+        
+        next_edge = vp[e2]
+        pre_edge = e2
+        self._edge_to_geodesic[e2] = geo
+        new_boundary_face = True
+        j = (index + 1) % nb_e
+        cell_to_index = {}
+        while next_edge != e2 or j != index: # we rotate around the vertex v2
+            v_test = self._edge_to_vertex[ep[next_edge]]
+            c_test = self._explored[v_test]
+            ng = self._edge_to_geodesic[ep[next_edge]]
+            cell_to_index[v_test] = True
+            if new_c.adjacent(c_test) and ng.unoriented() == new_c._polygon.intersection(c_test._polygon).geodesic() and cell_to_index[v_test]:
+                if new_edges[j].unoriented() == ng.unoriented():
+                    self._edge_to_geodesic[next_edge] = ng
+                    new_boundary_face = True
+                    new_ver += 1
+                    pre_edge = next_edge
+                    next_edge = vp[next_edge]
+                    j = (j + 1) % nb_e
+                    cell_to_index[v_test] = False
+                    try:
+                        self._graph = FatGraph(vp=vp,ep=ep)
+                    except TypeError:
+                        self._graph = FatGraph(vp=vp)
+                else:
+                    k = len(ep)
+                    ep.append(k+1)
+                    ep.append(k)
+                    vp.append(-1)
+                    vp.append(-1)
+                    vp[pre_edge] = k
+                    vp[k] = next_edge
+                    pre_edge = k
+                    self._edge_to_vertex.append(v2)
+                    self._edge_to_vertex.append(new_ver)
+                    self._edge_to_geodesic.append(new_edges[j])
+                    self._edge_to_geodesic.append(None)
+                    j = (j + 1) % nb_e
+                    if new_boundary_face:
+                        new_boundary_face = False
+                        self._boundary.append(new_ver)
+                        nfp = k+1
+                        nfl = k+1
+                        vp[k+1] = k+1
+                    else:
+                        vp[k+1] = nfl
+                        vp[nfp] = k+1
+                        nfl = k+1
+                    try:
+                        self._graph = FatGraph(vp=vp,ep=ep)
+                    except TypeError:
+                        self._graph = FatGraph(vp=vp)
+            else:
+                if new_boundary_face:
+                    new_boundary_face = False
+                    self._boundary.append(new_ver)
+                    ne = vp[next_edge]
+                    vp[next_edge]=next_edge
+                    self._edge_to_vertex[next_edge] = new_ver
+                    nfp = next_edge
+                    nfl = next_edge
+                    vp[pre_edge] = ne
+                    next_edge = ne
+                    try:
+                        self._graph = FatGraph(vp=vp,ep=ep)
+                    except TypeError:
+                        self._graph = FatGraph(vp=vp)
+                else:
+                    ne = vp[next_edge]
+                    vp[pre_edge] = ne
+                    vp[nfp] = next_edge
+                    vp[next_edge] = nfl
+                    nfl = next_edge
+                    self._edge_to_vertex[next_edge] = new_ver
+                    next_edge = ne
+                    try:
+                        self._graph = FatGraph(vp=vp,ep=ep)
+                    except TypeError:
+                        self._graph = FatGraph(vp=vp)
+        try:
+            self._graph = FatGraph(vp=vp,ep=ep)
+        except TypeError:
+            self._graph = FatGraph(vp=vp)
+        
+    def is_explorable(self,e):
+        if self._edge_to_geodesic[e] == None:
+            return False
+        if e%2 == 0:
+            e2 = e+1
+        else : e2 = e-1
+        if self._edge_to_geodesic[e2] != None:
+            return False
+        return True
+
+    def explorable_edges(self):
+        res = []
+        res2 = []
+        for e in range(len(self._graph.edge_permutation(copy=False))):
+            if self.is_explorable(e):
+                res.append(e)
+                res2.append(self._edge_to_geodesic[e]))
+        return res,res2
+            
+        
+    def plot(self, *args, **kwds):
+        res = Graphics()
+        for elt in self._explored.values():
+            res = res + elt.plot(*args, **kwds)
+        return res
+
+
+
+
