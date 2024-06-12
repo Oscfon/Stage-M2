@@ -399,10 +399,6 @@ class IsoDelaunayTessellation:
                     next_edge = vp[next_edge]
                     j = (j + 1) % nb_e
                     cell_to_index[v_test] = False
-                    try:
-                        self._graph = FatGraph(vp=vp,ep=ep)
-                    except TypeError:
-                        self._graph = FatGraph(vp=vp)
                 else:
                     k = len(ep)
                     ep.append(k+1)
@@ -420,17 +416,13 @@ class IsoDelaunayTessellation:
                     if new_boundary_face:
                         new_boundary_face = False
                         self._boundary.append(new_ver)
-                        nfp = k+1
-                        nfl = k+1
+                        ner = k+1
+                        nel = k+1
                         vp[k+1] = k+1
                     else:
-                        vp[k+1] = nfl
-                        vp[nfp] = k+1
-                        nfl = k+1
-                    try:
-                        self._graph = FatGraph(vp=vp,ep=ep)
-                    except TypeError:
-                        self._graph = FatGraph(vp=vp)
+                        vp[k+1] = nel
+                        vp[ner] = k+1
+                        nel = k+1
             else:
                 if new_boundary_face:
                     new_boundary_face = False
@@ -438,26 +430,18 @@ class IsoDelaunayTessellation:
                     ne = vp[next_edge]
                     vp[next_edge]=next_edge
                     self._edge_to_vertex[next_edge] = new_ver
-                    nfp = next_edge
-                    nfl = next_edge
+                    ner = next_edge # right next edge
+                    nel = next_edge # left next edge
                     vp[pre_edge] = ne
                     next_edge = ne
-                    try:
-                        self._graph = FatGraph(vp=vp,ep=ep)
-                    except TypeError:
-                        self._graph = FatGraph(vp=vp)
                 else:
                     ne = vp[next_edge]
                     vp[pre_edge] = ne
-                    vp[nfp] = next_edge
-                    vp[next_edge] = nfl
-                    nfl = next_edge
+                    vp[ner] = next_edge
+                    vp[next_edge] = nel
+                    ner = next_edge
                     self._edge_to_vertex[next_edge] = new_ver
                     next_edge = ne
-                    try:
-                        self._graph = FatGraph(vp=vp,ep=ep)
-                    except TypeError:
-                        self._graph = FatGraph(vp=vp)
         try:
             self._graph = FatGraph(vp=vp,ep=ep)
         except TypeError:
