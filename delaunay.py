@@ -316,6 +316,9 @@ class IsoDelaunayCell:
             return True
         else:
             return ValueError('this case should not occur.')
+
+    def area(self, numerical = True):
+        return self._polygon.area(numerical)
     
     def plot(self, *args, **kwds):
         return self._polygon.plot(*args, **kwds)
@@ -342,11 +345,32 @@ class IsoDelaunayTessellation:
             vp[2*i] = (2*i+2)%(2*k)
             vp[2*i+1] = (2*i+3)%(2*k)
         try:
-            self._graph = FatGraph(ep=ep, fp=fp) # the dual-graph of the cell already explored
+            self._graph = FatGraph(ep=ep, fp=fp, mutable = True) # the dual-graph of the cell already explored
         except TypeError:
-            self._graph = FatGraph(fp=fp)
+            self._graph = FatGraph(fp=fp, mutable = True)
         self._boundary = [1] # list of the boundary vertex (in the FatGraph, it correponds to a vertex but it's a Delaunay cell)
-    
+
+    def __repr__(self):
+        return 'Iso-Delaunay tesselation of the hyperbolic plane from iso-Delaunay cells of a {}'.format(self._explored[0]._triangulation._surface)
+
+    def _check(self):
+        self._graph._check()
+        if self._graph.euler_characteristic() != 2:
+            raise ValueError('The graph should be planar')
+        n = self._graph.num_vertices()
+        if n > len(self._explored)+len(self._boundary):
+            raise ValueError('There is vertex that are neither explored and unexplored')
+        elif n < len(self._explored)+len(self._boundary):
+            raise ValueError('There is a vertex that is simultanely explored and unexplored')
+        m = len(self._graph.face_permutation())
+        if m != len(self._edge_to_vertex) or m != len(self._edge_to_geodesic):
+            raise ValueError('There is an edge that is not assigned')
+        for e in self.explorable_edges()[0]:
+            v = self._edge_to_vertex[e]
+            geo = self._edge_to_geodesic[e]
+            oc = self._explored[v]
+            try : oc._correspondance[geo]
+            except KeyError : raise ValueError('There is an edge whose correspondance is not assigned')
 
     def explore(self, e): # e is the number of the semi-edge that we explore
         if self._edge_to_geodesic[e] == None:
@@ -369,9 +393,9 @@ class IsoDelaunayTessellation:
         self._boundary.remove(v2)
         self._explored[v2] = new_c
         
-        fp = self._graph.face_permutation(copy = True)
-        ep = self._graph.edge_permutation(copy = True)
-        vp = self._graph.vertex_permutation(copy = True)
+        fp = self._graph.face_permutation(copy = False)
+        #ep = self._graph.edge_permutation(copy = False)
+        vp = self._graph.vertex_permutation(copy = False)
         new_ver = self._graph.num_vertices()
         new_edges = new_c.edges()
         nb_e = len(new_edges)
@@ -386,9 +410,9 @@ class IsoDelaunayTessellation:
         j = (index + 1) % nb_e
         cell_to_index = {}
         while next_edge != e2 or j != index: # we rotate around the vertex v2
-            v_test = self._edge_to_vertex[ep[next_edge]]
+            v_test = self._edge_to_vertex[2*(next_edge//2)+(1- next_edge%2)]
             c_test = self._explored[v_test]
-            ng = self._edge_to_geodesic[ep[next_edge]]
+            ng = self._edge_to_geodesic[2*(next_edge//2)+(1- next_edge%2)]
             cell_to_index[v_test] = True
             if new_c.adjacent(c_test) and ng.unoriented() == new_c._polygon.intersection(c_test._polygon).geodesic() and cell_to_index[v_test]:
                 if new_edges[j].unoriented() == ng.unoriented():
@@ -400,52 +424,39 @@ class IsoDelaunayTessellation:
                     j = (j + 1) % nb_e
                     cell_to_index[v_test] = False
                 else:
-                    k = len(ep)
-                    ep.append(k+1)
-                    ep.append(k)
-                    vp.append(-1)
-                    vp.append(-1)
-                    vp[pre_edge] = k
-                    vp[k] = next_edge
-                    pre_edge = k
-                    self._edge_to_vertex.append(v2)
-                    self._edge_to_vertex.append(new_ver)
-                    self._edge_to_geodesic.append(new_edges[j])
-                    self._edge_to_geodesic.append(None)
-                    j = (j + 1) % nb_e
                     if new_boundary_face:
+                        self._edge_to_vertex.append(v2)
+                        self._edge_to_vertex.append(new_ver)
+                        self._edge_to_geodesic.append(new_edges[j])
+                        self._edge_to_geodesic.append(None)
                         new_boundary_face = False
                         self._boundary.append(new_ver)
-                        ner = k+1
-                        nel = k+1
-                        vp[k+1] = k+1
+                        pre_edge = self._graph.add_edge(next_edge)
+                        self._graph._check()
                     else:
-                        vp[k+1] = nel
-                        vp[ner] = k+1
-                        nel = k+1
+                        self._edge_to_vertex.append(new_ver)
+                        self._edge_to_vertex.append(v2)
+                        self._edge_to_geodesic.append(None)
+                        self._edge_to_geodesic.append(new_edges[j])
+                        self._graph._realloc(self._graph._n+2)
+                        self._graph.split_face(pre_edge,ner)
+                        nel = fp[2*(nel//2)+(1- nel%2)]
+                        pre_edge = vp[pre_edge]
+                    j = (j + 1) % nb_e
             else:
                 if new_boundary_face:
                     new_boundary_face = False
                     self._boundary.append(new_ver)
-                    ne = vp[next_edge]
-                    vp[next_edge]=next_edge
+                    self._graph.move_dart(next_edge)
                     self._edge_to_vertex[next_edge] = new_ver
                     ner = next_edge # right next edge
                     nel = next_edge # left next edge
-                    vp[pre_edge] = ne
-                    next_edge = ne
+                    next_edge = vp[pre_edge]
                 else:
-                    ne = vp[next_edge]
-                    vp[pre_edge] = ne
-                    vp[ner] = next_edge
-                    vp[next_edge] = nel
-                    ner = next_edge
+                    self._graph.move_dart(next_edge, ner)
                     self._edge_to_vertex[next_edge] = new_ver
-                    next_edge = ne
-        try:
-            self._graph = FatGraph(vp=vp,ep=ep)
-        except TypeError:
-            self._graph = FatGraph(vp=vp)
+                    ner = next_edge
+                    next_edge = vp[pre_edge]
         
     def is_explorable(self,e):
         if self._edge_to_geodesic[e] == None:
@@ -460,7 +471,7 @@ class IsoDelaunayTessellation:
     def explorable_edges(self):
         res = []
         res2 = []
-        for e in range(len(self._graph.edge_permutation(copy=False))):
+        for e in range(len(self._graph.vertex_permutation(copy=False))):
             if self.is_explorable(e):
                 res.append(e)
                 res2.append(self._edge_to_geodesic[e])
