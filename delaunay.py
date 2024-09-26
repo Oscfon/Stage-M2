@@ -362,6 +362,9 @@ class IsoDelaunayTessellation:
             raise ValueError('There is vertex that are neither explored and unexplored')
         elif n < len(self._explored)+len(self._boundary):
             raise ValueError('There is a vertex that is simultanely explored and unexplored')
+        for elt in self._boundary:
+            if elt in self._explored.keys():
+                raise ValueError('There is a vertex that is simultanely explored and unexplored')
         m = len(self._graph.face_permutation())
         if m != len(self._edge_to_vertex) or m != len(self._edge_to_geodesic):
             raise ValueError('There is an edge that is not assigned')
@@ -409,6 +412,7 @@ class IsoDelaunayTessellation:
         new_boundary_face = True
         j = (index + 1) % nb_e
         cell_to_index = {}
+        augment = False
         while next_edge != e2 or j != index: # we rotate around the vertex v2
             v_test = self._edge_to_vertex[2*(next_edge//2)+(1- next_edge%2)]
             c_test = self._explored[v_test]
@@ -418,12 +422,14 @@ class IsoDelaunayTessellation:
                 if new_edges[j].unoriented() == ng.unoriented():
                     self._edge_to_geodesic[next_edge] = ng
                     new_boundary_face = True
-                    new_ver += 1
+                    if augment:
+                        new_ver += 1
                     pre_edge = next_edge
                     next_edge = vp[next_edge]
                     j = (j + 1) % nb_e
                     cell_to_index[v_test] = False
                 else:
+                    augment = True
                     if new_boundary_face:
                         self._edge_to_vertex.append(v2)
                         self._edge_to_vertex.append(new_ver)
@@ -444,6 +450,7 @@ class IsoDelaunayTessellation:
                         pre_edge = vp[pre_edge]
                     j = (j + 1) % nb_e
             else:
+                augment = True
                 if new_boundary_face:
                     new_boundary_face = False
                     self._boundary.append(new_ver)
