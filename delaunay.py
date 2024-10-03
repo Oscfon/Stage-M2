@@ -13,6 +13,28 @@ from flatsurf.geometry.euclidean import ccw
 
 
 class FlatTriangulation:
+    r"""
+    EXAMPLES :
+
+        sage: from flatsurf import translation_surfaces
+        sage: S = translation_surfaces.arnoux_yoccoz(3)
+        sage: FlatTriangulation(S.triangulate())
+        Flat Triangulation of Translation Surface in H_3(2^2) built from 12 triangles
+
+    The surface must be triangulated.
+
+        sage: S = MutableOrientedSimilaritySurface(AA)
+        sage: p0 = polygons.regular_ngon(4)
+        sage: S.add_polygon(p0)
+        sage: S.glue((0,0),(0,2))
+        sage: S.glue((0,1),(0,3))
+        sage: S.set_immutable()
+        sage: FlatTriangulation(S)
+        ValueError: The surface is not triangulated
+        sage: FlatTriangulation(S.triangulate())
+        Flat Triangulation of Translation Surface in H_1(0) built from a square
+    
+    """
     def __init__(self,M):
         if not M.is_triangulated():
             raise ValueError("The surface is not triangulated")
@@ -59,7 +81,7 @@ class FlatTriangulation:
                 raise ValueError('({}, {}, {}) is not a valid triangle'.format(e1, e2, e3))
 
     def __repr__(self):
-        return 'Flat Triangulation of a {}'.format(self._surface)
+        return 'Flat {}'.format(self._surface)
 
     def copy(self):
         nt = FlatTriangulation(self._surface)
@@ -145,12 +167,31 @@ class FlatTriangulation:
         return (True, relabelling) if certificate else True
 
     def graph(self):
+        r"""
+        Return the FatGraph (from surfaces_dynamics) that describes the triangulations
+        """
         return self._triangulation.copy()
 
     def vectors(self):
+        r"""
+        Return the list of the saddle connections of the Flat Triangulation
+        """
         return self._vectors[:]
 
     def is_flipable(self,e1):
+        r"""
+        Test whether the edge can be flipped to form a new triangulation
+
+        EXAMPLES :
+            sage: from flatsurf import translation_surfaces
+            sage: S = translation_surfaces.arnoux_yoccoz(3)
+            sage: t = FlatTriangulation(S.triangulate())
+            sage: t.is_flipable(0)
+            True
+            sage: t.flip(0)
+            sage:t.is_flipable(4)
+            False
+        """
         if e1%2 == 0:
             e2 = e1+1
         else : e2 = e1-1
@@ -162,6 +203,25 @@ class FlatTriangulation:
         return (ccw(self._vectors[f2].vector(),self._vectors[g1].vector()) > 0) and (ccw(self._vectors[g2].vector(),self._vectors[f1].vector()) > 0)
 
     def flip(self, e1):
+        r"""
+        Return the FlatTriangulation obtained after the flip of the edge ``e1``.
+
+        EXAMPLES :
+        
+            sage: from flatsurf import translation_surfaces
+            sage: S = translation_surfaces.arnoux_yoccoz(3)
+            sage: t = FlatTriangulation(S.triangulate())
+            sage: t.is_flipable(0)
+            sage: t.flip(0)
+            sage: t
+            Flat Triangulation of Translation Surface in H_3(2^2) built from 12 triangles
+
+        The edge must be flipable.
+        
+            sage: t.flip(4)
+            ValueError: This edge is not flipable
+        """
+        
         M = self._surface
         if not self.is_flipable(e1):
              raise ValueError("This edge is not flipable")
@@ -223,7 +283,21 @@ class FlatTriangulation:
         self._vectors[e2] = M.tangent_vector(pol2, M.polygon(pol2).vertex(ver2), hol2)
 
     
-    def geodesic(self, e1): #return the hyperbolic geometric associate to the edge with label e1 in the corresponding triangulation
+    def geodesic(self, e1): 
+        r"""
+        Return the hyperbolic geodesic associate to the flip of the edge with label ``e1`` in the FlatTriangulation.
+        This function is used to compute the IsoDelaunayCell class.
+
+        EXAMPLES :
+        
+            sage: from flatsurf import translation_surfaces
+            sage: S = translation_surfaces.arnoux_yoccoz(3)
+            sage: t = FlatTriangulation(S.triangulate())
+            sage: t.geodesic(0)
+            {-0.0797431060641191?*x - 0.08737802538415273? = 0}
+
+        """
+        
         if not self.is_flipable(e1):
             return None
         if e1%2 == 0:
@@ -259,6 +333,18 @@ class FlatTriangulation:
 
 
 class IsoDelaunayCell:
+    r"""
+    A cell of the hyperbolic plane associated to a FlatTriangulation.
+
+    EXAMPLES :
+
+        sage: from flatsurf import translation_surfaces
+        sage: S = translation_surfaces.arnoux_yoccoz(3)
+        sage: t = FlatTriangulation(S.triangulate())
+        sage: IsoDelaunayCell(t)
+        Iso-Delaunay Cell of a Flat Triangulation of Translation Surface in H_3(2^2) built from 12 triangles
+    
+    """
     def __init__(self,t):
         self._triangulation = t.copy()
         Passage1 = True
@@ -294,11 +380,35 @@ class IsoDelaunayCell:
             raise ValueError('can not compare IsoDelaunayCell from different surface')
         return self._polygon == other._polygon
 
-    def edges(self): #return the list of geodesic that defines the cell in ccw order
+    def edges(self):
+        r"""
+        Return the list of geodesic that defines the cell in ccw order.
+        This geodesics are oriented !
+        """
         e = self._polygon.edges()
         return [elt.geodesic() for elt in e]
 
     def adjacent(self,other):
+        r"""
+        Test whether two IsoDelaunayCell are adjacents meaning that they share a common edge.
+
+        EXAMPLES :
+
+            sage: from flatsurf import translation_surfaces
+            sage: S = translation_surfaces.arnoux_yoccoz(3)
+            sage: t = FlatTriangulation(S.triangulate())
+            sage: R1 = IsoDelaunayCell(t)
+            sage: t.flip(2)
+            sage: R2 = IsoDelaunayCell(t)
+            sage: R1.is_adjacent(R2)
+            True
+            sage: t.flip(6)
+            sage: t.flip(22)
+            sage: R3 = IsoDelaunayCell(t)
+            sage: R1.adjacent(R3)
+            False
+        """
+        
         if not isinstance(other, IsoDelaunayCell):
             raise ValueError('can not compare adjacency of object of type {} with IsoDelaunayCell'.format(type(other).__name__))
         if not self._triangulation._surface == other._triangulation._surface:
@@ -325,6 +435,19 @@ class IsoDelaunayCell:
 
 
 class IsoDelaunayTessellation:
+    r"""
+    Tesselation of the hyperbolic plane from a certain surface.
+    Will contain the information of every explored IsoDelaunayCell.
+
+    EXAMPLES :
+
+        sage: from flatsurf import translation_surfaces
+        sage: S = translation_surfaces.arnoux_yoccoz(3)
+        sage: t = FlatTriangulation(S.triangulate())
+        sage: R = IsoDelaunayCell(t)
+        sage: IsoDelaunayTessellation(R)
+        Iso-Delaunay tesselation of the hyperbolic plane from 1 iso-Delaunay cells of a Triangulation of Translation Surface in H_3(2^2) built from 12 triangles
+    """
     def __init__(self,c):
         self._explored = {} #dictionnary of the cell already explored
         self._explored[0] = c
@@ -351,7 +474,7 @@ class IsoDelaunayTessellation:
         self._boundary = [1] # list of the boundary vertex (in the FatGraph, it correponds to a vertex but it's a Delaunay cell)
 
     def __repr__(self):
-        return 'Iso-Delaunay tesselation of the hyperbolic plane from iso-Delaunay cells of a {}'.format(self._explored[0]._triangulation._surface)
+        return 'Iso-Delaunay tesselation of the hyperbolic plane from {} iso-Delaunay cells of a {}'.format(len(self._explored),self._explored[0]._triangulation._surface)
 
     def _check(self):
         self._graph._check()
@@ -375,7 +498,28 @@ class IsoDelaunayTessellation:
             try : oc._correspondance[geo]
             except KeyError : raise ValueError('There is an edge whose correspondance is not assigned')
 
-    def explore(self, e): # e is the number of the semi-edge that we explore
+    def explore(self, e):
+        r"""
+        Add the cell obtaining by exploring accross the semi-edge ``e``
+
+        EXAMPLES :
+
+            sage: from flatsurf import translation_surfaces
+            sage: S = translation_surfaces.arnoux_yoccoz(3)
+            sage: t = FlatTriangulation(S.triangulate())
+            sage: R = IsoDelaunayCell(t)
+            sage: T = IsoDelaunayTessellation(R)
+            sage: T.explore(0)
+            sage: T
+            Iso-Delaunay tesselation of the hyperbolic plane from 2 iso-Delaunay cells of a Triangulation of Translation Surface in H_3(2^2) built from 12 triangles
+
+        The edge must be explorable.
+
+            sage: T.explore(1)
+            ValueError: The vertex linked to this edge has already been explored
+            sage: T.explore(5)
+            ValueError: This edge come from an unexplored vertex
+        """
         if self._edge_to_geodesic[e] == None:
             raise ValueError('This edge come from an unexplored vertex')
         if e%2 == 0:
@@ -466,6 +610,21 @@ class IsoDelaunayTessellation:
                     next_edge = vp[pre_edge]
         
     def is_explorable(self,e):
+        r"""
+        Test whether the edge ``e`` is explorable.
+
+        EXAMPLES :
+
+            sage: from flatsurf import translation_surfaces
+            sage: S = translation_surfaces.arnoux_yoccoz(3)
+            sage: t = FlatTriangulation(S.triangulate())
+            sage: R = IsoDelaunayCell(t)
+            sage: T = IsoDelaunayTessellation(R)
+            sage: T.is_explorable(0)
+            True
+            sage: T.is_explorable(1)
+            False
+        """
         if self._edge_to_geodesic[e] == None:
             return False
         if e%2 == 0:
@@ -476,6 +635,9 @@ class IsoDelaunayTessellation:
         return True
 
     def explorable_edges(self):
+        r"""
+        Return a tuple containing the list of the label of explorable edges and the list of the corresponding geodesics.
+        """
         res = []
         res2 = []
         for e in range(len(self._graph.vertex_permutation(copy=False))):
