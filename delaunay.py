@@ -2,6 +2,8 @@
 
 Iso-Delaunay
 
+This program enumerate saddle connections by using Iso-Delaunay Cell complex by following Bowman : https://pi.math.cornell.edu/~bowman/HRIproc.pdf
+
 """
 
 
